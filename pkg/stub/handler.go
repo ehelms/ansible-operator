@@ -45,6 +45,7 @@ func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {
 }
 
 func runPlaybook(path string, parameters map[string]interface{}) error {
+	parameters["metadata"] = metadata
 	b, err := json.Marshal(parameters)
 	if err != nil {
 		return err
