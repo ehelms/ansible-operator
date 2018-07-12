@@ -6,18 +6,19 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/automationbroker/ansible-operator/pkg/runner"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func NewHandler(m map[schema.GroupVersionKind]string) sdk.Handler {
+func NewHandler(m map[schema.GroupVersionKind]runner.Runner) sdk.Handler {
 	return &Handler{crdToPlaybook: m}
 }
 
 type Handler struct {
-	crdToPlaybook map[schema.GroupVersionKind]string
+	crdToPlaybook map[schema.GroupVersionKind]runner.Runner
 	// Fill me
 }
 
@@ -41,11 +42,10 @@ func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {
 		return nil
 	}
 
-	return runPlaybook(p, spec)
+	return p.Run(spec, u.GetName(), u.GetNamespace())
 }
 
 func runPlaybook(path string, parameters map[string]interface{}) error {
-	parameters["metadata"] = metadata
 	b, err := json.Marshal(parameters)
 	if err != nil {
 		return err

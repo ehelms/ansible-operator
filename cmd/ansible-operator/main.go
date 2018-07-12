@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"runtime"
 
+	"github.com/automationbroker/ansible-operator/pkg/runner"
 	stub "github.com/automationbroker/ansible-operator/pkg/stub"
 	sdk "github.com/operator-framework/operator-sdk/pkg/sdk"
 	k8sutil "github.com/operator-framework/operator-sdk/pkg/util/k8sutil"
@@ -47,7 +48,7 @@ func main() {
 		logrus.Fatalf("Failed to get configs: %v", err)
 	}
 
-	m := map[schema.GroupVersionKind]string{}
+	m := map[schema.GroupVersionKind]runner.Runner{}
 
 	for _, c := range configs {
 		logrus.Infof("Watching %s/%v, %s, %s, %d path: %v", c.Group, c.Version, c.Kind, namespace, resyncPeriod, c.Path)
@@ -57,7 +58,10 @@ func main() {
 			Kind:    c.Kind,
 		}
 		registerGVK(s)
-		m[s] = c.Path
+		m[s] = &runner.Playbook{
+			Path: c.Path,
+			GVK:  s,
+		}
 		sdk.Watch(fmt.Sprintf("%v/%v", c.Group, c.Version), c.Kind, namespace, resyncPeriod)
 
 	}
