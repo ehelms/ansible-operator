@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"runtime"
+	"time"
 
 	"github.com/automationbroker/ansible-operator/pkg/runner"
 	stub "github.com/automationbroker/ansible-operator/pkg/stub"
@@ -47,6 +49,8 @@ func main() {
 	if err != nil {
 		logrus.Fatalf("Failed to get configs: %v", err)
 	}
+	//Seed rand
+	rand.Seed(time.Now().Unix())
 
 	m := map[schema.GroupVersionKind]runner.Runner{}
 

@@ -2,9 +2,6 @@ package stub
 
 import (
 	"context"
-	"encoding/json"
-	"os"
-	"os/exec"
 
 	"github.com/automationbroker/ansible-operator/pkg/runner"
 	"github.com/operator-framework/operator-sdk/pkg/sdk"
@@ -42,16 +39,22 @@ func (h *Handler) Handle(ctx context.Context, event sdk.Event) error {
 		return nil
 	}
 
-	return p.Run(spec, u.GetName(), u.GetNamespace())
-}
-
-func runPlaybook(path string, parameters map[string]interface{}) error {
-	b, err := json.Marshal(parameters)
+	je, err := p.Run(spec, u.GetName(), u.GetNamespace())
 	if err != nil {
 		return err
 	}
-	dc := exec.Command("ansible-playbook", path, "-vv", "--extra-vars", string(b))
-	dc.Stdout = os.Stdout
-	dc.Stderr = os.Stderr
-	return dc.Run()
+	statusMap, ok := u.Object["status"].(map[string]interface{})
+	if !ok {
+		u.Object["status"] = runner.ResourceStatus{
+			Status: runner.NewStatusFromStatusJobEvent(je),
+		}
+		sdk.Update(u)
+		logrus.Infof("adding status for the first time")
+		return nil
+	}
+	// Need to conver the map[string]interface into a resource status.
+	rs := runner.UpdateResourceStatus(statusMap, je)
+	u.Object["status"] = rs
+	sdk.Update(u)
+	return nil
 }
