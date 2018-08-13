@@ -21,7 +21,64 @@ install:
 
 jobs:
   include:
-    - stage: test
+    - stage: test_minishift
+      before_script:
+        # setup minikube
+        - curl -Lo minishift-1.22.0.tar.gz https://github.com/minishift/minishift/releases/download/v1.22.0/minishift-1.22.0-linux-amd64.tgz && tar -xzf minishift-1.22.0.tar.gz
+        - cd minishift-1.22.0-linux-amd64 && chmod +x minishift && sudo mv minishift /usr/local/bin
+        - sudo minishift start --vm-driver=none
+        - minishift update-context
+        # Wait until node is ready
+        - JSONPATH='{range .items[*]}{@.metadata.name}:{range @.status.conditions[*]}{@.type}={@.status};{end}{end}'; until oc get nodes -o jsonpath="$JSONPATH" 2>&1 | grep -q "Ready=True"; do sleep 1; done
+      script:
+        # create example CRD and operator
+        - pushd example
+        - oc create -f deploy/rbac.yaml
+        - oc create -f deploy/crd.yaml
+        - oc create -f deploy/operator.yaml
+
+        # wait for operator pod to run
+        - pod=$(oc get pods | grep ansible-operator)
+        - |
+          while [[ "${pod}" != *"Running"* ]]; do
+            oc get pods
+            pod=$(oc get pods | grep ansible-operator)
+          done
+        - pod=$(echo $pod | awk '{print $1}')
+        - oc logs $pod
+
+        # set a test string, build example operator from previously built base image
+        - sed -i s/hello\ world/travis\ test/g busybox/defaults/main.yml
+        - docker build -t busybox-ansible-operator-test:test .
+        - oc patch deployment ansible-operator -p '{"spec":{"template":{"spec":{"containers":[{"name":"ansible-operator","imagePullPolicy":"Never"}]}}}}'
+        - oc set image deployment/ansible-operator *=busybox-ansible-operator-test:test
+
+        # wait for new operator pod
+        - oc get pods
+        - sleep 5
+        - pod=$(oc get pods | grep ansible-operator)
+        - |
+          while [[ "${pod}" != *"Running"* ]]; do
+            oc get pods
+            pod=$(oc get pods | grep ansible-operator)
+          done
+        - pod=$(echo $pod | awk '{print $1}')
+        - oc logs $pod
+
+        # deploy example resource and check for test string
+        - oc create -f deploy/cr.yaml
+        - pod=$(oc get pods | grep example-busybox || true)
+        - echo $pod
+        - |
+          while [[ "${pod}" != *"Running"* ]]; do
+            oc get pods
+            pod=$(oc get pods | grep example-busybox)
+          done
+        - oc get pods
+        - pod=$(echo $pod | awk '{print $1}')
+        - oc logs $pod | grep "travis test"
+
+    - stage: test_minikube
       before_script:
         # setup minikube
         - curl -Lo kubectl https://storage.googleapis.com/kubernetes-release/release/v1.9.0/bin/linux/amd64/kubectl && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
